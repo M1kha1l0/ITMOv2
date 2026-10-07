@@ -1,0 +1,11 @@
+{
+  "mcp": {
+    "servers": {
+      "practice04": {
+        "command": "node",
+        "args": [".opencode/mcp/server.js"],
+        "disabled": false
+      }
+    }
+  }
+}

@@ -48,8 +48,9 @@ def ensure_runtime() -> None:
     os.execv(py_bin, [py_bin, os.path.abspath(__file__), *sys.argv[1:]])
 
 
-# Bootstrap окружения до импортов сторонних пакетов
-ensure_runtime()
+# Bootstrap окружения до импортов сторонних пакетов, но не во время pytest
+if not os.environ.get("PYTEST_CURRENT_TEST"):
+    ensure_runtime()
 
 from rich.console import Console  # noqa: E402
 from rich.panel import Panel  # noqa: E402
@@ -58,6 +59,7 @@ from rich.progress import Progress, SpinnerColumn, TextColumn  # noqa: E402
 from dateutil import tz  # noqa: E402
 
 from app.weather import fetch_features_for_date  # noqa: E402
+from app.config import ensure_region_key, ensure_crop_key, CROPS  # noqa: E402
 from app.ollama_client import OllamaClient  # noqa: E402
 
 
@@ -71,26 +73,25 @@ def parse_date(date_str: str) -> datetime:
         raise ValueError("Ожидаемый формат даты: dd-mm-yyyy, пример: 15-05-2026") from e
 
 
-def build_prompt(facts: Dict[str, Any], date_iso: str) -> Dict[str, Any]:
+def build_prompt(facts: Dict[str, Any], date_iso: str, crop_key: str) -> Dict[str, Any]:
+    crop = CROPS[crop_key]
+    region_name = facts.get("location", {}).get("city", "Регион")
     system = (
-        "Ты — агроном-консультант по томатам для региона Санкт-Петербург. \n"
-        "На основе предоставленных погодных фактов реши, благоприятна ли посадка помидор в указанную дату.\n"
+        f"Ты — агроном-консультант по {crop['ru_name']} для региона {region_name}. \n"
+        "На основе предоставленных погодных фактов реши, благоприятна ли посадка в указанную дату.\n"
         "Отвечай строго в JSON без лишнего текста с полями: \n"
         "verdict — строка (например: 'Благоприятно' или 'Неблагоприятно'), \n"
         "probability — число от 0 до 100 (процент успеха), \n"
         "explanation — краткое объяснение с опорой на факты (коротко, 2-4 предложения).\n"
-        "Учитывай: оптимальные температуры почвы и воздуха для посадки рассады, отсутствие сильных заморозков, достаточную освещенность, умеренную облачность/осадки и ветер."
+        + crop["guidelines_ru"]
     )
     user = (
         "Дата: "
         + date_iso
-        + "\nРегион: Санкт-Петербург\nФакты (JSON):\n"
+        + f"\nРегион: {region_name}\nКультура: {crop['ru_name']}\nФакты (JSON):\n"
         + json.dumps(facts, ensure_ascii=False)
     )
-    return {
-        "system": system,
-        "user": user,
-    }
+    return {"system": system, "user": user}
 
 
 def print_result_from_model(content: str) -> None:
@@ -119,6 +120,8 @@ def main():
     parser.add_argument("date", help="Дата в формате dd-mm-yyyy")
     parser.add_argument("--model", default="qwen3.5:4b", help="Имя модели Ollama")
     parser.add_argument("--temperature", type=float, default=0.2, help="Температура выборов модели (0.0-2.0)")
+    parser.add_argument("--region", default="spb", help="Ключ региона (например: spb, moscow)")
+    parser.add_argument("--crop", default="tomato", help="Ключ культуры (например: tomato, potato)")
 
     args = parser.parse_args()
 
@@ -129,6 +132,12 @@ def main():
         raise SystemExit(2)
 
     date_iso = dt.strftime("%Y-%m-%d")
+    try:
+        region_key = ensure_region_key(args.region)
+        crop_key = ensure_crop_key(args.crop)
+    except ValueError as e:
+        console.print(Panel.fit(str(e), title="Неверный параметр", border_style="red"))
+        raise SystemExit(2)
     client = OllamaClient()
 
     try:
@@ -143,11 +152,11 @@ def main():
             progress.update(t_model, visible=False, completed=1)
 
             t_weather = progress.add_task("Получаю погодные данные и факты...", start=True)
-            facts = fetch_features_for_date(date_iso)
+            facts = fetch_features_for_date(date_iso, region_key)
             progress.update(t_weather, visible=False, completed=1)
 
             t_prompt = progress.add_task("Формирую запрос к модели...", start=True)
-            prompt = build_prompt(facts, date_iso)
+            prompt = build_prompt(facts, date_iso, crop_key)
             progress.update(t_prompt, visible=False, completed=1)
 
             t_infer = progress.add_task("Запрашиваю модель и жду ответ...", start=True)

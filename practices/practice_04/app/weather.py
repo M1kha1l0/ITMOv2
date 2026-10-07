@@ -1,17 +1,22 @@
 import requests
-from typing import Dict, Any
+from typing import Dict, Any, Tuple
+from .config import REGIONS
 
 
-# Координаты Санкт-Петербурга (приблизительно центр)
-SPB_LAT = 59.9386
-SPB_LON = 30.3141
+def _coords_for_region(region_key: str) -> Tuple[float, float, str, str]:
+    """Returns (lat, lon, tz, human_name) for region key from REGIONS."""
+    region = REGIONS.get(region_key)
+    if not region:
+        raise ValueError(f"Неизвестный регион: {region_key}")
+    return float(region["lat"]), float(region["lon"]), str(region["tz"]), str(region["name"])
 
 
-def _open_meteo_hourly_archive(date_iso: str) -> Dict[str, Any]:
+def _open_meteo_hourly_archive(date_iso: str, region_key: str) -> Dict[str, Any]:
     # Используем архив ERA5, который доступен для любой даты в прошлом
+    lat, lon, tz, _ = _coords_for_region(region_key)
     params = {
-        "latitude": SPB_LAT,
-        "longitude": SPB_LON,
+        "latitude": lat,
+        "longitude": lon,
         "start_date": date_iso,
         "end_date": date_iso,
         "hourly": ",".join([
@@ -22,7 +27,7 @@ def _open_meteo_hourly_archive(date_iso: str) -> Dict[str, Any]:
             "relativehumidity_2m",
             "windspeed_10m",
         ]),
-        "timezone": "Europe/Moscow",
+        "timezone": tz,
     }
     r = requests.get("https://archive-api.open-meteo.com/v1/era5", params=params, timeout=30)
     r.raise_for_status()
@@ -64,38 +69,53 @@ def _summarize_hourly(data: Dict[str, Any]) -> Dict[str, Any]:
 
     # Производные дневные метрики
     temps = hourly.get("temperature_2m") or []
-    if temps:
-        values["daily_temperature_max"] = max(temps)
-        values["daily_temperature_min"] = min(temps)
+    temps_num = [v for v in temps if isinstance(v, (int, float))]
+    if temps_num:
+        values["daily_temperature_max"] = max(temps_num)
+        values["daily_temperature_min"] = min(temps_num)
+    else:
+        values["daily_temperature_max"] = None
+        values["daily_temperature_min"] = None
 
     # сумма осадков за сутки
     precip = hourly.get("precipitation") or []
-    if precip:
-        values["daily_precipitation_sum"] = round(sum(v for v in precip if isinstance(v, (int, float))), 2)
+    precip_num = [v for v in precip if isinstance(v, (int, float))]
+    if precip_num:
+        values["daily_precipitation_sum"] = round(sum(precip_num), 2)
+    else:
+        values["daily_precipitation_sum"] = 0.0
 
     # оценка часов солнечного сияния: количество часов, где shortwave_radiation > 120 W/m^2
     sw = hourly.get("shortwave_radiation") or []
     if sw:
         values["sunshine_hours"] = sum(1 for v in sw if isinstance(v, (int, float)) and v > 120.0)
+    else:
+        values["sunshine_hours"] = 0
 
     # макс скорость ветра
     ws = hourly.get("windspeed_10m") or []
-    if ws:
-        values["daily_windspeed_max"] = max(ws)
+    ws_num = [v for v in ws if isinstance(v, (int, float))]
+    if ws_num:
+        values["daily_windspeed_max"] = max(ws_num)
+    else:
+        values["daily_windspeed_max"] = None
 
     return values
 
 
-def fetch_features_for_date(date_iso: str) -> Dict[str, Any]:
-    """Возвращает агрегированные факты по погоде/освещенности для указанной даты ISO (YYYY-MM-DD)."""
-    hourly_raw = _open_meteo_hourly_archive(date_iso)
+def fetch_features_for_date(date_iso: str, region_key: str = "spb") -> Dict[str, Any]:
+    """Возвращает агрегированные факты по погоде/освещенности для указанной даты ISO (YYYY-MM-DD).
+    Параметр region_key определяет место получения фактов.
+    """
+    lat, lon, tz, name = _coords_for_region(region_key)
+    hourly_raw = _open_meteo_hourly_archive(date_iso, region_key)
     hourly = _summarize_hourly(hourly_raw)
 
     facts: Dict[str, Any] = {
         "location": {
-            "city": "Санкт-Петербург",
-            "lat": SPB_LAT,
-            "lon": SPB_LON,
+            "city": name,
+            "lat": lat,
+            "lon": lon,
         },
         "date": date_iso,
         "daily": {
@@ -107,5 +127,7 @@ def fetch_features_for_date(date_iso: str) -> Dict[str, Any]:
         },
         "hourly": hourly,
         "data_source": "open-meteo.com ERA5",
+        "region_key": region_key,
+        "timezone": tz,
     }
     return facts
