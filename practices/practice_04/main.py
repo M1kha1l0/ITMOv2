@@ -94,23 +94,33 @@ def build_prompt(facts: Dict[str, Any], date_iso: str, crop_key: str) -> Dict[st
     return {"system": system, "user": user}
 
 
-def print_result_from_model(content: str) -> None:
-    # Пытаемся разобрать JSON и вывести структурированно; если не получилось — печатаем как есть
+def _parse_model_json(content: str) -> Dict[str, Any]:
+    """Парсит ответ модели. Бросает ValueError при пустом или не-JSON ответе.
+    Допускает любой словарь; валидацию полей держим мягкой, чтобы не ломать совместимость.
+    """
+    if content is None or not str(content).strip():
+        raise ValueError("Пустой ответ модели")
     try:
         data = json.loads(content)
-        verdict = data.get("verdict")
-        probability = data.get("probability")
-        explanation = data.get("explanation")
+    except Exception as e:
+        raise ValueError("Ответ модели не является корректным JSON") from e
+    if not isinstance(data, dict):
+        raise ValueError("Ожидался JSON-объект (dict) от модели")
+    return data
 
-        table = Table(title="Ответ модели", show_lines=False, expand=True)
-        table.add_column("Поле", style="bold cyan", no_wrap=True)
-        table.add_column("Значение")
-        table.add_row("verdict", str(verdict))
-        table.add_row("probability", str(probability))
-        table.add_row("explanation", str(explanation))
-        console.print(table)
-    except Exception:
-        console.print(Panel.fit(content, title="Ответ модели (как есть)", border_style="green"))
+
+def print_result_from_model_dict(data: Dict[str, Any]) -> None:
+    verdict = data.get("verdict")
+    probability = data.get("probability")
+    explanation = data.get("explanation")
+
+    table = Table(title="Ответ модели", show_lines=False, expand=True)
+    table.add_column("Поле", style="bold cyan", no_wrap=True)
+    table.add_column("Значение")
+    table.add_row("verdict", str(verdict))
+    table.add_row("probability", str(probability))
+    table.add_row("explanation", str(explanation))
+    console.print(table)
 
 
 def main():
@@ -132,11 +142,16 @@ def main():
         raise SystemExit(2)
 
     date_iso = dt.strftime("%Y-%m-%d")
+    # Валидируем регион и культуру заранее, чтобы не зависнуть на ensure_model и т.п.
     try:
         region_key = ensure_region_key(args.region)
-        crop_key = ensure_crop_key(args.crop)
     except ValueError as e:
         console.print(Panel.fit(str(e), title="Неверный параметр", border_style="red"))
+        raise SystemExit(2)
+    try:
+        crop_key = ensure_crop_key(args.crop)
+    except ValueError as e:
+        console.print(Panel.fit(str(e), title="Неверная культура", border_style="red"))
         raise SystemExit(2)
     client = OllamaClient()
 
@@ -148,7 +163,8 @@ def main():
             console=console,
         ) as progress:
             t_model = progress.add_task("Проверяю и подготавливаю модель Ollama...", start=True)
-            client.ensure_model(args.model)
+            # Ограничим время подготовки модели, чтобы не зависать слишком долго
+            client.ensure_model(args.model, timeout_seconds=180, wait=True)
             progress.update(t_model, visible=False, completed=1)
 
             t_weather = progress.add_task("Получаю погодные данные и факты...", start=True)
@@ -168,14 +184,34 @@ def main():
                 stream=False,
                 options=options,
                 output_format="json",
+                timeout_seconds=90,
             )
             progress.update(t_infer, visible=False, completed=1)
     except Exception as e:
         console.print(Panel.fit(str(e), title="Ошибка обработки", border_style="red"))
         raise SystemExit(1)
 
-    # Важно: выводим ровно ответ модели (без придумывания своего вердикта)
-    print_result_from_model(content)
+    # Разбор ответа модели без повторных попыток
+    try:
+        data = _parse_model_json(content)
+    except Exception as e:
+        # Покажем диагностическую информацию и первые символы ответа (если он был), чтобы не казалось, что "ответа нет"
+        raw_preview = ""
+        try:
+            # content может быть не определён в некоторых исключениях; защитимся
+            if 'content' in locals() and isinstance(content, str) and content.strip():
+                raw_preview = "\nСырой ответ (фрагмент):\n" + content.strip()[:300]
+        except Exception:
+            pass
+        console.print(Panel.fit(
+            "Модель не вернула корректный JSON.\n" + str(e) + raw_preview,
+            title="Некорректный ответ модели",
+            border_style="red",
+        ))
+        raise SystemExit(1)
+
+    # Важно: выводим разбор JSON ответа модели
+    print_result_from_model_dict(data)
 
 
 if __name__ == "__main__":

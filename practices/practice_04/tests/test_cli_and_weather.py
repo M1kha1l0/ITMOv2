@@ -4,7 +4,7 @@ import pytest
 
 from app import weather
 from app.config import ensure_region_key, ensure_crop_key
-from main import parse_date, build_prompt
+from main import parse_date, build_prompt, _parse_model_json
 
 
 def test_parse_date_valid():
@@ -105,3 +105,19 @@ def test_summarize_hourly_edge_values():
     assert out["daily_precipitation_sum"] == 0.0
     # sunshine > 120 only
     assert out["sunshine_hours"] == 1
+
+
+def test_parse_model_json_hardening():
+    # Empty
+    import pytest
+    with pytest.raises(ValueError):
+        _parse_model_json("")
+    # Non-JSON
+    with pytest.raises(ValueError):
+        _parse_model_json("not a json")
+    # Non-dict JSON
+    with pytest.raises(ValueError):
+        _parse_model_json("[]")
+    # Valid dict
+    d = _parse_model_json('{"verdict":"ok","probability":50,"explanation":"x"}')
+    assert d["verdict"] == "ok"

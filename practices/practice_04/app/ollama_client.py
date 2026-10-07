@@ -32,7 +32,7 @@ class OllamaClient:
         except Exception:
             return False
 
-    def ensure_model(self, model: str) -> None:
+    def ensure_model(self, model: str, timeout_seconds: int = 600, wait: bool = True) -> None:
         # Проверяем наличие модели. Если нет — тянем.
         tags = requests.get(f"{self.base_url}/api/tags", timeout=20)
         tags.raise_for_status()
@@ -45,13 +45,19 @@ class OllamaClient:
             # pull может быть долгим; оставим простой цикл ожидания
             resp = requests.post(f"{self.base_url}/api/pull", json={"name": model}, timeout=20)
             resp.raise_for_status()
-            # stream прогресса: опрашиваем пока не появится среди тегов
-            start = time.time()
-            while time.time() - start < 1800:  # до 30 минут ожидания
-                time.sleep(3)
-                tags = requests.get(f"{self.base_url}/api/tags", timeout=20)
-                if any((m.get("name") == model) for m in tags.json().get("models", []) or []):
-                    break
+            if wait:
+                # stream прогресса: опрашиваем пока не появится среди тегов
+                start = time.time()
+                # Ограничение общего времени ожидания, по умолчанию 10 минут
+                while time.time() - start < max(60, int(timeout_seconds)):
+                    time.sleep(3)
+                    tags = requests.get(f"{self.base_url}/api/tags", timeout=20)
+                    if any((m.get("name") == model) for m in tags.json().get("models", []) or []):
+                        break
+                else:
+                    raise RuntimeError(
+                        f"Не удалось подготовить модель '{model}' за отведённое время ({timeout_seconds}s)."
+                    )
 
     def chat(
         self,
@@ -61,6 +67,7 @@ class OllamaClient:
         stream: bool = False,
         options: Optional[Dict[str, Any]] = None,
         output_format: Optional[str] = None,
+        timeout_seconds: int = 300,
     ) -> str:
         # Используем /api/chat для совместимости с чат-моделями
         payload = {
@@ -77,7 +84,14 @@ class OllamaClient:
             # Ollama поддерживает top-level поле "format": "json" или json_schema
             payload["format"] = output_format
 
-        r = requests.post(f"{self.base_url}/api/chat", json=payload, timeout=300)
+        # Явно отключаем keep-alive для некоторых прокси/сетей, чтобы избежать подвисания
+        headers = {"Connection": "close"}
+        r = requests.post(
+            f"{self.base_url}/api/chat",
+            json=payload,
+            timeout=max(5, int(timeout_seconds)),
+            headers=headers,
+        )
         r.raise_for_status()
         data = r.json()
 
@@ -95,6 +109,8 @@ class OllamaClient:
             return "".join(chunks)
 
         # non-stream: ожидаем финальный message
+        if not isinstance(data, dict):
+            raise RuntimeError("Некорректный формат ответа от Ollama API")
         message = data.get("message") or {}
         content = message.get("content", "")
-        return content
+        return content or ""
