@@ -1,0 +1,21 @@
+{
+  "name": "practice_05",
+  "version": "1.0.0",
+  "description": "Tomato Planting Favorability — CLI (multi-region/crop)",
+  "main": "index.js",
+  "directories": {
+    "test": "tests"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "git-spec": "git-spec"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "dotenv": "^16.6.1",
+    "git-spec": "^1.1.7",
+    "markdownlint-cli2": "^0.23.3"
+  }
+}

@@ -1,0 +1,11 @@
+__pycache__/
+.venv/
+.idea/
+.DS_Store
+*.pyc
+*.pyo
+*.egg-info/
+node_modules/
+pglite-data/
+.pytest_cache/
+.env
