@@ -1,6 +1,9 @@
 {
   "$schema": "https://opencode.ai/config.json",
   "default_agent": "build",
+  "instructions": [
+    "AGENTS.md"
+  ],
   "provider": {
     "vsellm": {
       "npm": "@ai-sdk/openai-compatible",
@@ -16,6 +19,27 @@
         "anthropic/claude-sonnet-4": {
           "name": "anthropic/claude-sonnet-4"
         }
+      }
+    }
+  },
+  "skills": {
+    "paths": [
+      ".opencode/skills",
+      "practices/practice_05/.opencode/skills"
+    ]
+  },
+  "plugin": [
+    "opencode-gemini-auth",
+    "./practices/practice_05/.opencode/plugins/practice04-check/index.js"
+  ],
+  "mcp": {
+    "practice04": {
+      "type": "local",
+      "command": ["node", "/storage/ssd/Documents/education/itmo/vibecoding/ITMOv2/practices/practice_05/.opencode/mcp/server.js"],
+      "enabled": true,
+      "environment": {
+        "PY_BIN": ".venv/bin/python",
+        "MCP_PORT": "8777"
       }
     }
   }

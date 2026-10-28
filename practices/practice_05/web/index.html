@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tomato Planting Favorability — Оценка посадки</title>
+  <link rel="stylesheet" href="/static/styles.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="app-container">
+    <header class="app-header">
+      <div class="logo-area">
+        <span class="logo-icon">🌱</span>
+        <div>
+          <h1>Tomato Planting Favorability</h1>
+          <p class="subtitle">Агрономическая оценка благоприятности посадки по погодным факторам ERA5 и локальной LLM</p>
+        </div>
+      </div>
+      <div class="api-status" id="api-status">
+        <span class="status-dot checking"></span>
+        <span id="api-status-text">Проверка API...</span>
+      </div>
+    </header>
+
+    <main class="main-content">
+      <!-- Input Card -->
+      <section class="card input-card">
+        <h2 class="card-title">Параметры расчёта</h2>
+        <form id="planting-form" novalidate>
+          <div class="form-group">
+            <label for="date-input">Дата посадки (дд-мм-гггг):</label>
+            <div class="input-with-hint">
+              <input
+                type="text"
+                id="date-input"
+                name="date"
+                placeholder="15-05-2026"
+                maxlength="10"
+                required
+                autocomplete="off"
+              >
+              <div class="date-presets">
+                <button type="button" class="btn-preset" data-date="15-05-2026">15 мая 2026</button>
+                <button type="button" class="btn-preset" data-date="01-06-2026">1 июня 2026</button>
+                <button type="button" class="btn-preset" data-date="10-04-2026">10 апр 2026</button>
+              </div>
+            </div>
+            <small class="field-error" id="date-error"></small>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group col">
+              <label for="region-select">Регион:</label>
+              <select id="region-select" name="region">
+                <option value="spb" selected>Санкт-Петербург (Северо-Запад)</option>
+                <option value="moscow">Москва (Центральный регион)</option>
+              </select>
+            </div>
+
+            <div class="form-group col">
+              <label for="crop-select">Культура:</label>
+              <select id="crop-select" name="crop">
+                <option value="tomato" selected>🍅 Томаты (Tomato)</option>
+                <option value="potato">🥔 Картофель (Potato)</option>
+                <option value="cucumber">🥒 Огурцы (Cucumber)</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Advanced Settings Collapsible -->
+          <details class="advanced-settings">
+            <summary>Расширенные параметры модели (LLM)</summary>
+            <div class="advanced-fields">
+              <div class="form-group">
+                <label for="model-input">Модель Ollama:</label>
+                <input type="text" id="model-input" name="model" value="qwen3.5:4b">
+              </div>
+              <div class="form-group">
+                <label for="temperature-input">Температура: <span id="temp-val">0.2</span></label>
+                <input type="range" id="temperature-input" name="temperature" min="0.0" max="1.5" step="0.1" value="0.2">
+              </div>
+            </div>
+          </details>
+
+          <button type="submit" class="btn btn-primary" id="submit-btn">
+            <span class="btn-text">Получить вердикт</span>
+            <span class="btn-spinner hidden"></span>
+          </button>
+        </form>
+      </section>
+
+      <!-- Alert Message Box -->
+      <div id="alert-box" class="alert hidden" role="alert"></div>
+
+      <!-- Result Card -->
+      <section id="result-card" class="card result-card hidden">
+        <div class="result-header">
+          <h2 class="card-title">Вердикт агронома-консультанта</h2>
+          <span class="badge" id="date-badge"></span>
+        </div>
+
+        <div class="verdict-summary">
+          <div class="verdict-box" id="verdict-box">
+            <span class="verdict-label">Решение:</span>
+            <h3 class="verdict-value" id="verdict-text">-</h3>
+          </div>
+
+          <div class="probability-box">
+            <div class="prob-header">
+              <span class="prob-label">Вероятность успеха:</span>
+              <span class="prob-value" id="probability-text">0%</span>
+            </div>
+            <div class="progress-bar">
+              <div class="progress-fill" id="progress-fill" style="width: 0%"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="explanation-box">
+          <h4>Обоснование:</h4>
+          <p id="explanation-text" class="explanation-content"></p>
+        </div>
+
+        <!-- Weather Facts Block -->
+        <div class="weather-facts-container">
+          <h4>Метеорологические факты (Open-Meteo ERA5)</h4>
+          <div class="facts-grid" id="facts-grid">
+            <div class="fact-card">
+              <span class="fact-icon">🌡️</span>
+              <div class="fact-data">
+                <span class="fact-label">Температура (мин/макс)</span>
+                <span class="fact-val" id="fact-temp">-</span>
+              </div>
+            </div>
+            <div class="fact-card">
+              <span class="fact-icon">☀️</span>
+              <div class="fact-data">
+                <span class="fact-label">Солнечное сияние</span>
+                <span class="fact-val" id="fact-sun">-</span>
+              </div>
+            </div>
+            <div class="fact-card">
+              <span class="fact-icon">💧</span>
+              <div class="fact-data">
+                <span class="fact-label">Осадки за сутки</span>
+                <span class="fact-val" id="fact-precip">-</span>
+              </div>
+            </div>
+            <div class="fact-card">
+              <span class="fact-icon">💨</span>
+              <div class="fact-data">
+                <span class="fact-label">Макс. скорость ветра</span>
+                <span class="fact-val" id="fact-wind">-</span>
+              </div>
+            </div>
+          </div>
+          <div class="meta-info" id="meta-info"></div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="app-footer">
+      <p>ITMO AI Brownfield SDD • Практика 5 • Git-Spec & FastAPI</p>
+    </footer>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
