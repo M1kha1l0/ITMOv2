@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Макет и интерактивный прототип: IssueTriage AI (Практика 8)</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+    body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; }
+    .focus-ring:focus { outline: 2px solid #4f46e5; outline-offset: 2px; }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-900 min-h-screen">
+
+  <!-- Header / Navigation -->
+  <header class="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      <div class="flex items-center space-x-3">
+        <div class="w-10 h-10 rounded-lg bg-indigo-600 flex items-center justify-center text-white font-bold text-xl shadow-sm">
+          IT
+        </div>
+        <div>
+          <h1 class="text-lg font-bold text-slate-900 leading-tight">IssueTriage AI</h1>
+          <p class="text-xs text-slate-500">Интерфейс сервиса классификации GitHub Issues поверх n8n (Практика 8)</p>
+        </div>
+      </div>
+      <div class="flex items-center space-x-2">
+        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800">
+          ● n8n Webhook Online
+        </span>
+        <span class="text-xs text-slate-400">|</span>
+        <span class="text-xs font-mono text-slate-600 bg-slate-100 px-2 py-1 rounded">Дизайн-система: Tailwind UI</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Prototype State Controller Banner -->
+  <div class="bg-indigo-900 text-indigo-100 px-4 py-3 shadow-inner">
+    <div class="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-3 text-sm">
+      <div class="flex items-center space-x-2">
+        <span class="font-semibold text-white">🎛️ Переключатель состояний макета:</span>
+        <span class="text-xs text-indigo-200">(Сгенерировано с помощью AI, доработано тимлидом)</span>
+      </div>
+      <div class="flex flex-wrap gap-1.5" id="state-buttons">
+        <button onclick="setState('initial')" class="state-btn px-3 py-1 rounded bg-indigo-700 text-white font-medium hover:bg-indigo-600 transition" data-state="initial">1. Исходный экран</button>
+        <button onclick="setState('validation')" class="state-btn px-3 py-1 rounded bg-indigo-800/60 text-indigo-200 font-medium hover:bg-indigo-600 transition" data-state="validation">2. Ошибки валидации</button>
+        <button onclick="setState('loading')" class="state-btn px-3 py-1 rounded bg-indigo-800/60 text-indigo-200 font-medium hover:bg-indigo-600 transition" data-state="loading">3. Загрузка (Anti-double-submit)</button>
+        <button onclick="setState('success')" class="state-btn px-3 py-1 rounded bg-indigo-800/60 text-indigo-200 font-medium hover:bg-indigo-600 transition" data-state="success">4. Успех (Результат)</button>
+        <button onclick="setState('error')" class="state-btn px-3 py-1 rounded bg-indigo-800/60 text-indigo-200 font-medium hover:bg-indigo-600 transition" data-state="error">5. Ошибка API & Retry</button>
+        <button onclick="setState('empty')" class="state-btn px-3 py-1 rounded bg-indigo-800/60 text-indigo-200 font-medium hover:bg-indigo-600 transition" data-state="empty">6. Пустые данные</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main Container -->
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+
+    <!-- KPI / Metrics Grid -->
+    <section class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8" aria-label="Метрики проекта">
+      <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
+        <div>
+          <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Всего обработано</p>
+          <p class="text-2xl font-bold text-slate-900 mt-1" id="kpi-total">14</p>
+        </div>
+        <div class="w-10 h-10 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold">📋</div>
+      </div>
+      <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
+        <div>
+          <p class="text-xs font-semibold text-rose-500 uppercase tracking-wider">Баги</p>
+          <p class="text-2xl font-bold text-rose-600 mt-1" id="kpi-bugs">6</p>
+        </div>
+        <div class="w-10 h-10 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center font-bold">🐞</div>
+      </div>
+      <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
+        <div>
+          <p class="text-xs font-semibold text-emerald-500 uppercase tracking-wider">Фичи</p>
+          <p class="text-2xl font-bold text-emerald-600 mt-1" id="kpi-feats">5</p>
+        </div>
+        <div class="w-10 h-10 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">✨</div>
+      </div>
+      <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
+        <div>
+          <p class="text-xs font-semibold text-amber-500 uppercase tracking-wider">Needs Triage</p>
+          <p class="text-2xl font-bold text-amber-600 mt-1" id="kpi-triage">2</p>
+        </div>
+        <div class="w-10 h-10 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center font-bold">⚠️</div>
+      </div>
+    </section>
+
+    <!-- App Layout: Form on Left, Processed List on Right -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+
+      <!-- LEFT COLUMN: Issue Triage Form -->
+      <section class="lg:col-span-5">
+        <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-6 sticky top-24">
+          <div class="flex items-center justify-between mb-5 pb-3 border-b border-slate-100">
+            <div>
+              <h2 class="text-lg font-bold text-slate-900">Новое Issue на AI-триаж</h2>
+              <p class="text-xs text-slate-500">Отправка в n8n Sub-workflow классификатор</p>
+            </div>
+            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-700">
+              Form v1.2
+            </span>
+          </div>
+
+          <!-- Alert Container for Feedback -->
+          <div id="form-alert" class="hidden mb-5"></div>
+
+          <form id="triage-form" onsubmit="event.preventDefault();" class="space-y-4" novalidate>
+            <!-- Title Field -->
+            <div>
+              <label for="issue-title" class="block text-sm font-semibold text-slate-700 mb-1">
+                Заголовок Issue <span class="text-rose-500">*</span>
+              </label>
+              <input type="text" id="issue-title" name="title"
+                placeholder="Например: [Bug] Ошибка авторизации в токене..."
+                class="w-full px-3.5 py-2.5 rounded-lg border border-slate-300 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition text-sm"
+                aria-describedby="title-hint title-error" />
+              <p id="title-hint" class="text-xs text-slate-500 mt-1">Минимум 5 символов. Отражает суть проблемы или фичи.</p>
+              <p id="title-error" class="text-xs text-rose-600 mt-1 font-medium hidden">Заголовок обязателен и должен содержать минимум 5 символов.</p>
+            </div>
+
+            <!-- Body Field -->
+            <div>
+              <label for="issue-body" class="block text-sm font-semibold text-slate-700 mb-1">
+                Описание проблемы / запроса <span class="text-rose-500">*</span>
+              </label>
+              <textarea id="issue-body" name="body" rows="4"
+                placeholder="Подробно опишите шаги воспроизведения, ожидаемое поведение или требования..."
+                class="w-full px-3.5 py-2.5 rounded-lg border border-slate-300 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition text-sm"
+                aria-describedby="body-hint body-error"></textarea>
+              <p id="body-hint" class="text-xs text-slate-500 mt-1">Минимум 10 символов. Контекст для точной оценки AI.</p>
+              <p id="body-error" class="text-xs text-rose-600 mt-1 font-medium hidden">Описание обязательно и должно содержать минимум 10 символов.</p>
+            </div>
+
+            <!-- Author Field -->
+            <div>
+              <label for="issue-author" class="block text-sm font-semibold text-slate-700 mb-1">
+                Автор Issue <span class="text-slate-400 font-normal">(опционально)</span>
+              </label>
+              <div class="relative">
+                <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400 text-sm">@</span>
+                <input type="text" id="issue-author" name="author" value="M1kha1l0"
+                  class="w-full pl-8 pr-3.5 py-2.5 rounded-lg border border-slate-300 text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition text-sm" />
+              </div>
+            </div>
+
+            <!-- Anti-Double-Submit & Actions -->
+            <div class="pt-3 flex items-center justify-between">
+              <button type="button" onclick="fillSample('bug')" class="text-xs text-indigo-600 hover:text-indigo-800 font-medium">
+                Заполнить тестовым багом
+              </button>
+              <button type="button" onclick="fillSample('ambiguous')" class="text-xs text-amber-600 hover:text-amber-800 font-medium">
+                Тест needs-triage
+              </button>
+            </div>
+
+            <button type="submit" id="submit-btn"
+              class="w-full flex items-center justify-center px-4 py-3 border border-transparent rounded-lg shadow-sm text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition">
+              <span id="btn-spinner" class="hidden mr-2 animate-spin">⏳</span>
+              <span id="btn-text">Отправить на AI-триаж в n8n</span>
+            </button>
+            <p class="text-xs text-center text-slate-400">Форма защищена от двойных кликов и спама Enter.</p>
+          </form>
+        </div>
+      </section>
+
+      <!-- RIGHT COLUMN: Issues Stream & Realtime Output -->
+      <section class="lg:col-span-7">
+        <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
+          <div class="flex items-center justify-between mb-5 pb-3 border-b border-slate-100">
+            <div>
+              <h2 class="text-lg font-bold text-slate-900">Поток обработанных обращений</h2>
+              <p class="text-xs text-slate-500">Результаты работы n8n Workflow и присвоенные лейблы</p>
+            </div>
+            <div class="flex items-center space-x-2">
+              <button onclick="triggerWeekly()" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200 transition">
+                📊 Запустить дайджест недели
+              </button>
+            </div>
+          </div>
+
+          <!-- Empty State Container -->
+          <div id="empty-state" class="hidden py-16 text-center">
+            <div class="w-16 h-16 mx-auto mb-4 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center text-2xl font-bold">
+              📭
+            </div>
+            <h3 class="text-base font-bold text-slate-900">Нет обработанных Issue</h3>
+            <p class="text-sm text-slate-500 max-w-sm mx-auto mt-1">Заполните форму слева, чтобы отправить первое обращение в нейросетевой классификатор n8n.</p>
+          </div>
+
+          <!-- Error State Banner (When API fails) -->
+          <div id="error-state-banner" class="hidden mb-6 p-4 rounded-lg bg-rose-50 border border-rose-200">
+            <div class="flex items-start">
+              <div class="text-rose-500 text-lg mr-3">❌</div>
+              <div class="flex-1">
+                <h4 class="text-sm font-bold text-rose-900">Ошибка соединения с вебхуком n8n</h4>
+                <p class="text-xs text-rose-700 mt-1">Сервер n8n временно недоступен или вернул ошибку 500. Проверьте статус инстанса.</p>
+                <button onclick="setState('initial')" class="mt-2.5 px-3 py-1 rounded text-xs font-semibold bg-rose-600 text-white hover:bg-rose-700 transition">
+                  Повторить попытку (Retry)
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Issues List Container -->
+          <div id="issues-list" class="space-y-3">
+            <!-- Items injected by JS -->
+          </div>
+        </div>
+      </section>
+
+    </div>
+
+    <!-- Design System / Component Library Tokens Documentation -->
+    <section class="mt-12 bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
+      <h3 class="text-base font-bold text-slate-900 mb-3">🎨 Дизайн-система и библиотека компонентов</h3>
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-4 text-xs">
+        <div class="p-3 bg-slate-50 rounded-lg border border-slate-100">
+          <p class="font-bold text-slate-700 mb-1">Библиотека компонентов</p>
+          <p class="text-slate-600">Tailwind CSS + Headless UI patterns (кнопки, бейджи, инпуты, карточки, модальные окна, алерты).</p>
+        </div>
+        <div class="p-3 bg-slate-50 rounded-lg border border-slate-100">
+          <p class="font-bold text-slate-700 mb-1">Цветовая палитра</p>
+          <p class="text-slate-600">Slate (фон/текст), Indigo (акцент #4f46e5), Rose (#e11d48 баги), Emerald (#059669 фичи), Amber (#d97706 триаж).</p>
+        </div>
+        <div class="p-3 bg-slate-50 rounded-lg border border-slate-100">
+          <p class="font-bold text-slate-700 mb-1">Типографика и отступы</p>
+          <p class="text-slate-600">Шрифт Inter. 4px/8px модульная сетка (gap-4, p-6, space-y-3). Четкая иерархия H1-H4, body, caption.</p>
+        </div>
+        <div class="p-3 bg-slate-50 rounded-lg border border-slate-100">
+          <p class="font-bold text-slate-700 mb-1">Доступность (a11y)</p>
+          <p class="text-slate-600">Видимый outline при навигации с Tab (`focus:ring-2`), aria-describedby для ошибок, полная поддержка клавиатуры.</p>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Modal / Dialog for Issue Inspection -->
+  <div id="issue-modal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4"
+    role="dialog" aria-modal="true" aria-labelledby="modal-title">
+    <div class="bg-white rounded-xl max-w-lg w-full p-6 shadow-xl border border-slate-200">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
+        <h3 id="modal-title" class="text-base font-bold text-slate-900">Детали обращения</h3>
+        <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600 p-1 rounded-lg focus-ring" aria-label="Закрыть">✕</button>
+      </div>
+      <div id="modal-content" class="text-sm space-y-3">
+        <!-- Dynamic content -->
+      </div>
+      <div class="mt-6 pt-3 border-t border-slate-100 flex justify-end">
+        <button onclick="closeModal()" class="px-4 py-2 rounded-lg bg-slate-100 text-slate-700 text-xs font-semibold hover:bg-slate-200 focus-ring">
+          Закрыть
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Interactive State Engine JS -->
+  <script>
+    const sampleIssues = [
+      {
+        id: "#4",
+        title: "[Bug] Memory leak in WebSocket connection pool",
+        body: "High concurrency leads to java.lang.OutOfMemoryError. Connections are not released back to the pool.",
+        author: "M1kha1l0",
+        type: "bug",
+        confidence: 0.95,
+        reasoning: "The issue describes a memory leak resulting in an OutOfMemoryError, which indicates broken behavior in connection pooling.",
+        label: "bug",
+        commentPosted: true,
+        date: "Только что"
+      },
+      {
+        id: "#6",
+        title: "[Feature] Add Prometheus metrics endpoint",
+        body: "Please expose /metrics with latency histograms and active connection counters.",
+        author: "M1kha1l0",
+        type: "feature",
+        confidence: 0.95,
+        reasoning: "The issue requests the addition of a new /metrics endpoint, which is a clear request for new functionality.",
+        label: "feature",
+        commentPosted: true,
+        date: "2 мин назад"
+      },
+      {
+        id: "#8",
+        title: "Иногда не работает",
+        body: "Что-то нажимаю и ничего не происходит, почините пожалуйста.",
+        author: "M1kha1l0",
+        type: "unknown",
+        confidence: 0.50,
+        reasoning: "Description is completely vague, no error logs or reproduction steps provided.",
+        label: "needs-triage",
+        commentPosted: false,
+        date: "5 мин назад"
+      }
+    ];
+
+    function renderIssues(items) {
+      const list = document.getElementById('issues-list');
+      list.innerHTML = items.map(item => {
+        let badgeClass = "bg-rose-100 text-rose-800 border-rose-200";
+        let icon = "🐞";
+        if (item.type === "feature") {
+          badgeClass = "bg-emerald-100 text-emerald-800 border-emerald-200";
+          icon = "✨";
+        } else if (item.type === "task") {
+          badgeClass = "bg-sky-100 text-sky-800 border-sky-200";
+          icon = "📋";
+        } else if (item.type === "unknown") {
+          badgeClass = "bg-amber-100 text-amber-800 border-amber-200";
+          icon = "⚠️";
+        }
+
+        return `
+          <div class="p-4 rounded-xl border border-slate-200 hover:border-indigo-300 transition bg-white shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div class="flex-1">
+              <div class="flex items-center space-x-2 mb-1">
+                <span class="text-xs font-mono font-bold text-slate-400">${item.id}</span>
+                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border ${badgeClass}">
+                  ${icon} ${item.label}
+                </span>
+                <span class="text-xs text-slate-400">·</span>
+                <span class="text-xs text-slate-500 font-medium">Уверенность AI: <b>${Math.round(item.confidence * 100)}%</b></span>
+              </div>
+              <h4 class="text-sm font-semibold text-slate-900">${item.title}</h4>
+              <p class="text-xs text-slate-500 mt-0.5 line-clamp-1">${item.reasoning}</p>
+            </div>
+            <div class="flex items-center space-x-2 self-end sm:self-center">
+              <button onclick='viewDetails(${JSON.stringify(item).replace(/'/g, "&apos;")})' class="px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 text-slate-700 transition">
+                Детали
+              </button>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function setState(state) {
+      document.querySelectorAll('.state-btn').forEach(btn => {
+        if (btn.dataset.state === state) {
+          btn.className = "state-btn px-3 py-1 rounded bg-indigo-700 text-white font-medium hover:bg-indigo-600 transition";
+        } else {
+          btn.className = "state-btn px-3 py-1 rounded bg-indigo-800/60 text-indigo-200 font-medium hover:bg-indigo-600 transition";
+        }
+      });
+
+      const titleInput = document.getElementById('issue-title');
+      const bodyInput = document.getElementById('issue-body');
+      const titleError = document.getElementById('title-error');
+      const bodyError = document.getElementById('body-error');
+      const submitBtn = document.getElementById('submit-btn');
+      const spinner = document.getElementById('btn-spinner');
+      const btnText = document.getElementById('btn-text');
+      const formAlert = document.getElementById('form-alert');
+      const emptyState = document.getElementById('empty-state');
+      const errorBanner = document.getElementById('error-state-banner');
+      const issuesList = document.getElementById('issues-list');
+
+      // Reset common fields
+      titleError.classList.add('hidden');
+      bodyError.classList.add('hidden');
+      titleInput.classList.remove('border-rose-500');
+      bodyInput.classList.remove('border-rose-500');
+      submitBtn.disabled = false;
+      spinner.classList.add('hidden');
+      formAlert.classList.add('hidden');
+      emptyState.classList.add('hidden');
+      errorBanner.classList.add('hidden');
+      issuesList.classList.remove('hidden');
+
+      if (state === 'initial') {
+        titleInput.value = "";
+        bodyInput.value = "";
+        btnText.textContent = "Отправить на AI-триаж в n8n";
+        renderIssues(sampleIssues);
+      } else if (state === 'validation') {
+        titleInput.value = "Баг";
+        bodyInput.value = "Не пашет";
+        titleError.classList.remove('hidden');
+        bodyError.classList.remove('hidden');
+        titleInput.classList.add('border-rose-500');
+        bodyInput.classList.add('border-rose-500');
+        btnText.textContent = "Отправить на AI-триаж в n8n";
+        renderIssues(sampleIssues);
+      } else if (state === 'loading') {
+        titleInput.value = "[Bug] WebSocket connection leak";
+        bodyInput.value = "High memory usage observed during stress testing...";
+        submitBtn.disabled = true;
+        spinner.classList.remove('hidden');
+        btnText.textContent = "Классификация в n8n...";
+        renderIssues(sampleIssues);
+      } else if (state === 'success') {
+        titleInput.value = "";
+        bodyInput.value = "";
+        btnText.textContent = "Отправить на AI-триаж в n8n";
+        formAlert.className = "mb-5 p-4 rounded-lg bg-emerald-50 border border-emerald-200 text-xs text-emerald-800 flex items-center";
+        formAlert.innerHTML = "✅ <b>Успешно:</b> Issue классифицирован как <b>bug</b> (уверенность 95%). Лейбл проставлен, комментарий опубликован!";
+        formAlert.classList.remove('hidden');
+        renderIssues(sampleIssues);
+      } else if (state === 'error') {
+        btnText.textContent = "Отправить на AI-триаж в n8n";
+        errorBanner.classList.remove('hidden');
+        renderIssues(sampleIssues);
+      } else if (state === 'empty') {
+        titleInput.value = "";
+        bodyInput.value = "";
+        btnText.textContent = "Отправить на AI-триаж в n8n";
+        emptyState.classList.remove('hidden');
+        issuesList.classList.add('hidden');
+      }
+    }
+
+    function fillSample(type) {
+      if (type === 'bug') {
+        document.getElementById('issue-title').value = "[Bug] NullPointerException in UserSession.init()";
+        document.getElementById('issue-body').value = "When authorization header is malformed, app crashes with NPE at line 42 without returning 401 status.";
+      } else {
+        document.getElementById('issue-title').value = "Иногда не работает";
+        document.getElementById('issue-body').value = "Кажется что-то сломалось или кнопка не нажимается, сделайте чтобы работало.";
+      }
+    }
+
+    function viewDetails(item) {
+      const modal = document.getElementById('issue-modal');
+      const content = document.getElementById('modal-content');
+      document.getElementById('modal-title').textContent = `${item.id}: ${item.title}`;
+      content.innerHTML = `
+        <div class="bg-slate-50 p-3 rounded-lg border border-slate-200 space-y-1">
+          <p class="text-xs text-slate-500 font-semibold">Классификация n8n Sub-workflow:</p>
+          <p class="text-sm font-bold text-slate-900">Тип: <span class="uppercase text-indigo-600">${item.type}</span> | Уверенность: ${Math.round(item.confidence * 100)}%</p>
+          <p class="text-xs text-slate-600"><b>Лейбл:</b> <span class="bg-slate-200 px-2 py-0.5 rounded">${item.label}</span></p>
+          <p class="text-xs text-slate-600"><b>Комментарий:</b> ${item.commentPosted ? "✅ Опубликован в GitHub" : "🚫 Пропущен (Unknown / Needs Triage)"}</p>
+        </div>
+        <div>
+          <p class="text-xs font-semibold text-slate-500 mb-1">AI-обоснование (LLM Chain reasoning):</p>
+          <p class="text-xs bg-slate-50 p-2.5 rounded border border-slate-100 text-slate-700 leading-relaxed">${item.reasoning}</p>
+        </div>
+        <div>
+          <p class="text-xs font-semibold text-slate-500 mb-1">Тело обращения:</p>
+          <p class="text-xs text-slate-600 whitespace-pre-wrap">${item.body}</p>
+        </div>
+      `;
+      modal.classList.remove('hidden');
+    }
+
+    function closeModal() {
+      document.getElementById('issue-modal').classList.add('hidden');
+    }
+
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') closeModal();
+    });
+
+    function triggerWeekly() {
+      alert("Запрос отправлен в n8n на генерацию еженедельного дайджеста!");
+    }
+
+    // Init with initial state
+    renderIssues(sampleIssues);
+  </script>
+</body>
+</html>
