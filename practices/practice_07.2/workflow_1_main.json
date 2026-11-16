@@ -1,0 +1,607 @@
+{
+  "id": "NSTDGFTmyuPZB8le",
+  "name": "[Practice 7.2] Main Workflow: GitHub Issues Automation",
+  "description": null,
+  "active": true,
+  "activeVersionId": "d1267897-8ba3-4592-8b20-e5053b9ba5f8",
+  "createdAt": "2026-11-16T11:39:25.642Z",
+  "updatedAt": "2026-11-16T11:46:29.342Z",
+  "isArchived": false,
+  "versionId": "d1267897-8ba3-4592-8b20-e5053b9ba5f8",
+  "versionCounter": 4,
+  "sourceWorkflowId": null,
+  "triggerCount": 2,
+  "nodes": [
+    {
+      "id": "gh-trigger",
+      "name": "GitHub_Issues_Trigger",
+      "type": "n8n-nodes-base.githubTrigger",
+      "typeVersion": 1,
+      "position": [
+        100,
+        300
+      ],
+      "parameters": {
+        "events": [
+          "issues"
+        ],
+        "options": {},
+        "owner": {
+          "__rl": true,
+          "mode": "name",
+          "value": "M1kha1l0"
+        },
+        "repository": {
+          "__rl": true,
+          "mode": "name",
+          "value": "sample-python-project"
+        }
+      },
+      "credentials": {
+        "githubApi": {
+          "id": "wqEWxCbnjXX9mOvc",
+          "name": "GitHub M1kha1l0"
+        }
+      },
+      "webhookId": "fef5d181-378d-46f4-8a50-2527cf44faa1"
+    },
+    {
+      "id": "webhook-trigger",
+      "name": "Test_Webhook_Trigger",
+      "webhookId": "6109c0ea-1b64-4af5-90c3-fe8684dbd408",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        100,
+        500
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "options": {},
+        "path": "github-issues-webhook",
+        "responseMode": "onReceived"
+      }
+    },
+    {
+      "id": "parse-issue",
+      "name": "Parse_Issue_Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        340,
+        400
+      ],
+      "parameters": {
+        "jsCode": "// Extract and normalize issue payload\nconst payload = $json.body || $json;\nconst action = payload.action || \"opened\";\nconst issue = payload.issue || payload;\n\nif (action !== \"opened\" && action !== \"reopened\" && action !== \"created\") {\n  return [];\n}\n\nif (!issue || !issue.number) {\n  return [];\n}\n\nconst repo = payload.repository || {};\nconst repoFullName = repo.full_name || \"M1kha1l0/sample-python-project\";\nconst repoOwner = repo.owner?.login || \"M1kha1l0\";\nconst repoName = repo.name || \"sample-python-project\";\n\nreturn [{\n  json: {\n    issue_number: issue.number,\n    issue_id: String(issue.number),\n    title: issue.title || \"Untitled Issue\",\n    body: issue.body || \"\",\n    author: issue.user?.login || \"unknown\",\n    author_association: issue.author_association || \"NONE\",\n    action: action,\n    repo_full_name: repoFullName,\n    repo_owner: repoOwner,\n    repo_name: repoName,\n    created_at: issue.created_at || new Date().toISOString()\n  }\n}];"
+      }
+    },
+    {
+      "id": "check-dedup",
+      "name": "Check_Deduplication",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        560,
+        400
+      ],
+      "parameters": {
+        "dataTableId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "SEQUuLjOXwZCNEJe"
+        },
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "issue_id",
+              "keyValue": "={{ $json.issue_id }}"
+            }
+          ]
+        },
+        "matchType": "allConditions",
+        "operation": "rowNotExists"
+      }
+    },
+    {
+      "id": "exec-subworkflow",
+      "name": "Call_Classifier_Subworkflow",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.4,
+      "position": [
+        800,
+        400
+      ],
+      "parameters": {
+        "options": {},
+        "workflowId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "6fpaspSs3hByxl39"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "body": "={{ $('Parse_Issue_Payload').first().json.body }}",
+            "title": "={{ $('Parse_Issue_Payload').first().json.title }}"
+          }
+        }
+      }
+    },
+    {
+      "id": "decision-logic",
+      "name": "Triage_Decision_Logic",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1040,
+        400
+      ],
+      "parameters": {
+        "jsCode": "const issueData = $('Parse_Issue_Payload').first().json;\nconst classification = $json;\n\nconst type = (classification.type || \"unknown\").toLowerCase().trim();\nconst confidence = Number(classification.confidence || 0);\nconst reasoning = classification.reasoning || \"\";\n\n// Criterion 2: If confidence < 0.8 or type is unknown -> needs-triage\nlet branch = type;\nif (confidence < 0.8 || ![\"bug\", \"task\", \"feature\"].includes(type)) {\n  branch = \"needs-triage\";\n}\n\nlet labelToApply = branch;\nlet commentBody = null;\n\nif (branch === \"bug\") {\n  commentBody = `### 🤖 AI Issue Assistant: Баг-репорт принят\\n` +\n    `> 🏷️ **Тип:** \\`bug\\`\\n` +\n    `> 📊 **Уверенность:** \\`${Math.round(confidence * 100)}%\\`\\n` +\n    `> 📝 **Анализ:** ${reasoning}\\n\\n` +\n    `Спасибо за баг-репорт! Команда разработки уже оповещена и приступит к анализу проблемы.`;\n} else if (branch === \"feature\") {\n  commentBody = `### 🤖 AI Issue Assistant: Запрос фичи зарегистрирован\\n` +\n    `> 🏷️ **Тип:** \\`feature\\`\\n` +\n    `> 📊 **Уверенность:** \\`${Math.round(confidence * 100)}%\\`\\n` +\n    `> 📝 **Анализ:** ${reasoning}\\n\\n` +\n    `Спасибо за предложение новой функциональности! Задача добавлена в бэклог для оценки продуктовой ценности.`;\n} else if (branch === \"task\") {\n  commentBody = `### 🤖 AI Issue Assistant: Задача / вопрос зарегистрирован\\n` +\n    `> 🏷️ **Тип:** \\`task\\`\\n` +\n    `> 📊 **Уверенность:** \\`${Math.round(confidence * 100)}%\\`\\n` +\n    `> 📝 **Анализ:** ${reasoning}\\n\\n` +\n    `Спасибо за обращение! Вопрос принят в работу мейнтейнерами.`;\n} else {\n  // needs-triage: STRICT REQUIREMENT - NO COMMENT POSTED\n  commentBody = null;\n}\n\nconst isFirstTime = (issueData.author_association === \"NONE\");\n\nreturn [{\n  json: {\n    issue_number: issueData.issue_number,\n    issue_id: issueData.issue_id,\n    title: issueData.title,\n    body: issueData.body,\n    author: issueData.author,\n    author_association: issueData.author_association,\n    repo_full_name: issueData.repo_full_name,\n    type: type,\n    confidence: confidence,\n    reasoning: reasoning,\n    branch: branch,\n    label: labelToApply,\n    comment: commentBody,\n    is_first_time: isFirstTime,\n    created_at: issueData.created_at\n  }\n}];"
+      }
+    },
+    {
+      "id": "switch-types",
+      "name": "Switch_By_Issue_Type",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        1280,
+        400
+      ],
+      "parameters": {
+        "mode": "expression",
+        "numberOutputs": 4,
+        "output": "={{ ['bug', 'task', 'feature', 'needs-triage'].indexOf($json.branch) !== -1 ? ['bug', 'task', 'feature', 'needs-triage'].indexOf($json.branch) : 3 }}"
+      }
+    },
+    {
+      "id": "apply-label-node",
+      "name": "Apply_GitHub_Label",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1560,
+        400
+      ],
+      "parameters": {
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/vnd.github.v3+json"
+            }
+          ]
+        },
+        "jsonBody": "={{ JSON.stringify([$json.label]) }}",
+        "method": "POST",
+        "options": {},
+        "sendBody": true,
+        "sendHeaders": true,
+        "specifyBody": "json",
+        "url": "=https://api.github.com/repos/{{ $json.repo_full_name }}/issues/{{ $json.issue_number }}/labels"
+      },
+      "credentials": {
+        "httpBearerAuth": {
+          "id": "mHPhURwz6NgtP2as",
+          "name": "GitHub Bearer Token"
+        }
+      }
+    },
+    {
+      "id": "has-comment-check",
+      "name": "Has_Comment_Check",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1780,
+        400
+      ],
+      "parameters": {
+        "conditions": {
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "c_has_comment",
+              "leftValue": "={{ $('Triage_Decision_Logic').first().json.comment }}",
+              "operator": {
+                "operation": "notEmpty",
+                "type": "string"
+              }
+            }
+          ],
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          }
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "post-comment-node",
+      "name": "Post_Triage_Comment",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2000,
+        300
+      ],
+      "parameters": {
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/vnd.github.v3+json"
+            }
+          ]
+        },
+        "jsonBody": "={{ JSON.stringify({ body: $('Triage_Decision_Logic').first().json.comment }) }}",
+        "method": "POST",
+        "options": {},
+        "sendBody": true,
+        "sendHeaders": true,
+        "specifyBody": "json",
+        "url": "=https://api.github.com/repos/{{ $('Triage_Decision_Logic').first().json.repo_full_name }}/issues/{{ $('Triage_Decision_Logic').first().json.issue_number }}/comments"
+      },
+      "credentials": {
+        "httpBearerAuth": {
+          "id": "mHPhURwz6NgtP2as",
+          "name": "GitHub Bearer Token"
+        }
+      }
+    },
+    {
+      "id": "check-first-time",
+      "name": "Is_First_Time_Contributor",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        2220,
+        400
+      ],
+      "parameters": {
+        "conditions": {
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "c_first_time",
+              "leftValue": "={{ $('Triage_Decision_Logic').first().json.is_first_time }}",
+              "operator": {
+                "operation": "equals",
+                "type": "boolean"
+              },
+              "rightValue": true
+            }
+          ],
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          }
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "label-first-time",
+      "name": "Add_First_Time_Label",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2440,
+        300
+      ],
+      "parameters": {
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/vnd.github.v3+json"
+            }
+          ]
+        },
+        "jsonBody": "={{ JSON.stringify([\"first-time-contributor\"]) }}",
+        "method": "POST",
+        "options": {},
+        "sendBody": true,
+        "sendHeaders": true,
+        "specifyBody": "json",
+        "url": "=https://api.github.com/repos/{{ $('Triage_Decision_Logic').first().json.repo_full_name }}/issues/{{ $('Triage_Decision_Logic').first().json.issue_number }}/labels"
+      },
+      "credentials": {
+        "httpBearerAuth": {
+          "id": "mHPhURwz6NgtP2as",
+          "name": "GitHub Bearer Token"
+        }
+      }
+    },
+    {
+      "id": "comment-first-time",
+      "name": "Welcome_First_Time_Contributor",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2660,
+        300
+      ],
+      "parameters": {
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/vnd.github.v3+json"
+            }
+          ]
+        },
+        "jsonBody": "={{ JSON.stringify({ body: `👋 Привет @${$('Triage_Decision_Logic').first().json.author}! Рады вашему первому Issue в нашем проекте. Рекомендуем ознакомиться с руководством по контрибьюции в [CONTRIBUTING.md](https://github.com/${$('Triage_Decision_Logic').first().json.repo_full_name}/blob/main/CONTRIBUTING.md).` }) }}",
+        "method": "POST",
+        "options": {},
+        "sendBody": true,
+        "sendHeaders": true,
+        "specifyBody": "json",
+        "url": "=https://api.github.com/repos/{{ $('Triage_Decision_Logic').first().json.repo_full_name }}/issues/{{ $('Triage_Decision_Logic').first().json.issue_number }}/comments"
+      },
+      "credentials": {
+        "httpBearerAuth": {
+          "id": "mHPhURwz6NgtP2as",
+          "name": "GitHub Bearer Token"
+        }
+      }
+    },
+    {
+      "id": "save-dedup",
+      "name": "Save_Processed_Issue",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        2900,
+        400
+      ],
+      "parameters": {
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "author": "={{ $('Triage_Decision_Logic').first().json.author }}",
+            "created_at": "={{ $('Triage_Decision_Logic').first().json.created_at }}",
+            "issue_id": "={{ $('Triage_Decision_Logic').first().json.issue_id }}"
+          }
+        },
+        "dataTableId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "SEQUuLjOXwZCNEJe"
+        },
+        "options": {}
+      }
+    }
+  ],
+  "connections": {
+    "Add_First_Time_Label": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Welcome_First_Time_Contributor",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Apply_GitHub_Label": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Has_Comment_Check",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Call_Classifier_Subworkflow": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Triage_Decision_Logic",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Check_Deduplication": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Call_Classifier_Subworkflow",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "GitHub_Issues_Trigger": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Parse_Issue_Payload",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Has_Comment_Check": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Post_Triage_Comment",
+            "type": "main"
+          }
+        ],
+        [
+          {
+            "index": 0,
+            "node": "Is_First_Time_Contributor",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Is_First_Time_Contributor": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Add_First_Time_Label",
+            "type": "main"
+          }
+        ],
+        [
+          {
+            "index": 0,
+            "node": "Save_Processed_Issue",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Parse_Issue_Payload": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Check_Deduplication",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Post_Triage_Comment": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Is_First_Time_Contributor",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Switch_By_Issue_Type": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Apply_GitHub_Label",
+            "type": "main"
+          }
+        ],
+        [
+          {
+            "index": 0,
+            "node": "Apply_GitHub_Label",
+            "type": "main"
+          }
+        ],
+        [
+          {
+            "index": 0,
+            "node": "Apply_GitHub_Label",
+            "type": "main"
+          }
+        ],
+        [
+          {
+            "index": 0,
+            "node": "Apply_GitHub_Label",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Test_Webhook_Trigger": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Parse_Issue_Payload",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Triage_Decision_Logic": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Switch_By_Issue_Type",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Welcome_First_Time_Contributor": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Save_Processed_Issue",
+            "type": "main"
+          }
+        ]
+      ]
+    }
+  },
+  "nodeGroups": [],
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": {
+    "node:GitHub_Issues_Trigger": {
+      "webhookId": 712609923,
+      "webhookEvents": [
+        "issues"
+      ],
+      "webhookSecret": "963270d762023ed955a56becc7c77c5e653c83fc92dcbc092810d346b86c06a4"
+    }
+  },
+  "pinData": null,
+  "meta": null,
+  "tags": [],
+  "shared": [
+    {
+      "role": "workflow:owner",
+      "workflowId": "NSTDGFTmyuPZB8le",
+      "projectId": "pKuK9YNPQWYSy2EA",
+      "project": {
+        "id": "pKuK9YNPQWYSy2EA",
+        "name": "Mikhail Chernetsov <michail.tchernetsov@ya.ru>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "customTelemetryTags": [],
+        "creatorId": "22092845-3675-4b96-a566-4451241e33e7",
+        "createdAt": "2026-11-06T07:11:33.244Z",
+        "updatedAt": "2026-11-06T07:12:02.739Z"
+      },
+      "createdAt": "2026-11-16T11:39:25.644Z",
+      "updatedAt": "2026-11-16T11:39:25.644Z"
+    }
+  ],
+  "parentFolder": null
+}

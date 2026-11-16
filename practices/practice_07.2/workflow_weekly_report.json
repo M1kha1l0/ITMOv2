@@ -1,0 +1,564 @@
+{
+  "id": "hnVyNLoOIhJFEHyQ",
+  "name": "[Practice 7.2] Weekly Issues Digest & AI Report",
+  "description": null,
+  "active": true,
+  "activeVersionId": "1653f21d-ba4a-47e7-93a1-de4ee9568bf8",
+  "createdAt": "2026-11-16T11:41:44.826Z",
+  "updatedAt": "2026-11-16T11:55:22.436Z",
+  "isArchived": false,
+  "versionId": "1653f21d-ba4a-47e7-93a1-de4ee9568bf8",
+  "versionCounter": 5,
+  "sourceWorkflowId": null,
+  "triggerCount": 2,
+  "nodes": [
+    {
+      "id": "cron-trigger",
+      "name": "Cron_Trigger_Monday_9AM",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        100,
+        300
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "expression": "0 9 * * MON",
+              "field": "cronExpression"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "webhook-trigger",
+      "name": "Webhook_Trigger_Weekly",
+      "webhookId": "6063ad2b-66c9-475f-9174-c922fd33c797",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        100,
+        500
+      ],
+      "parameters": {
+        "httpMethod": "GET",
+        "options": {},
+        "path": "weekly-digest-trigger",
+        "responseMode": "lastNode"
+      }
+    },
+    {
+      "id": "manual-trigger",
+      "name": "Manual_Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        100,
+        700
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "prep-window",
+      "name": "Prepare_Time_Window",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        340,
+        480
+      ],
+      "parameters": {
+        "jsCode": "// Compute 7 days window\nconst now = new Date();\nconst sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);\nconst sinceDate = sevenDaysAgo.toISOString();\nconst weekDate = now.toISOString().slice(0, 10);\nconst repoFullName = \"M1kha1l0/sample-python-project\";\n\nreturn [{\n  json: {\n    since_date: sinceDate,\n    week_date: weekDate,\n    repo_full_name: repoFullName,\n    timestamp: now.toISOString()\n  }\n}];"
+      }
+    },
+    {
+      "id": "req-bugs",
+      "name": "GitHub_Open_Bugs",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        560,
+        480
+      ],
+      "parameters": {
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/vnd.github.v3+json"
+            }
+          ]
+        },
+        "method": "GET",
+        "options": {},
+        "sendHeaders": true,
+        "url": "=https://api.github.com/repos/{{ $('Prepare_Time_Window').first().json.repo_full_name }}/issues?state=open&labels=bug&since={{ $('Prepare_Time_Window').first().json.since_date }}"
+      },
+      "credentials": {
+        "httpBearerAuth": {
+          "id": "mHPhURwz6NgtP2as",
+          "name": "GitHub Bearer Token"
+        }
+      }
+    },
+    {
+      "id": "req-features",
+      "name": "GitHub_Open_Features",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        780,
+        480
+      ],
+      "parameters": {
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/vnd.github.v3+json"
+            }
+          ]
+        },
+        "method": "GET",
+        "options": {},
+        "sendHeaders": true,
+        "url": "=https://api.github.com/repos/{{ $('Prepare_Time_Window').first().json.repo_full_name }}/issues?state=open&labels=feature&since={{ $('Prepare_Time_Window').first().json.since_date }}"
+      },
+      "credentials": {
+        "httpBearerAuth": {
+          "id": "mHPhURwz6NgtP2as",
+          "name": "GitHub Bearer Token"
+        }
+      }
+    },
+    {
+      "id": "req-closed",
+      "name": "GitHub_Closed_Issues",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1000,
+        480
+      ],
+      "parameters": {
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/vnd.github.v3+json"
+            }
+          ]
+        },
+        "method": "GET",
+        "options": {},
+        "sendHeaders": true,
+        "url": "=https://api.github.com/repos/{{ $('Prepare_Time_Window').first().json.repo_full_name }}/issues?state=closed&since={{ $('Prepare_Time_Window').first().json.since_date }}"
+      },
+      "credentials": {
+        "httpBearerAuth": {
+          "id": "mHPhURwz6NgtP2as",
+          "name": "GitHub Bearer Token"
+        }
+      }
+    },
+    {
+      "id": "req-all",
+      "name": "GitHub_All_Issues_Week",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1220,
+        480
+      ],
+      "parameters": {
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/vnd.github.v3+json"
+            }
+          ]
+        },
+        "method": "GET",
+        "options": {},
+        "sendHeaders": true,
+        "url": "=https://api.github.com/repos/{{ $('Prepare_Time_Window').first().json.repo_full_name }}/issues?state=all&since={{ $('Prepare_Time_Window').first().json.since_date }}"
+      },
+      "credentials": {
+        "httpBearerAuth": {
+          "id": "mHPhURwz6NgtP2as",
+          "name": "GitHub Bearer Token"
+        }
+      }
+    },
+    {
+      "id": "aggregate-stats",
+      "name": "Aggregate_Statistics",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1440,
+        480
+      ],
+      "parameters": {
+        "jsCode": "// Aggregate and group statistics by type and by author\nconst prep = $('Prepare_Time_Window').first().json;\n\nfunction normalizeItems(nodeName) {\n  try {\n    const raw = $(nodeName).all().map(i => i.json);\n    let flat = [];\n    for (const r of raw) {\n      if (Array.isArray(r)) {\n        flat = flat.concat(r);\n      } else if (r && r.data && Array.isArray(r.data)) {\n        flat = flat.concat(r.data);\n      } else if (r && r.number) {\n        flat.push(r);\n      }\n    }\n    return flat.filter(item => !item.pull_request);\n  } catch (e) {\n    return [];\n  }\n}\n\nconst allIssues = normalizeItems('GitHub_All_Issues_Week');\nconst bugs = normalizeItems('GitHub_Open_Bugs');\nconst features = normalizeItems('GitHub_Open_Features');\nconst closed = normalizeItems('GitHub_Closed_Issues');\n\nconst issueMap = new Map();\nallIssues.forEach(iss => {\n  if (iss.number) issueMap.set(iss.number, iss);\n});\n\nlet bugsCount = bugs.length;\nlet featuresCount = features.length;\nlet tasksCount = 0;\nlet needsTriageCount = 0;\nlet otherCount = 0;\n\nfor (const [num, iss] of issueMap.entries()) {\n  const labelNames = (iss.labels || []).map(l => (typeof l === 'string' ? l : l.name || '').toLowerCase());\n  if (labelNames.includes('task')) {\n    tasksCount++;\n  } else if (labelNames.includes('needs-triage')) {\n    needsTriageCount++;\n  } else if (!labelNames.includes('bug') && !labelNames.includes('feature')) {\n    otherCount++;\n  }\n}\n\nconst totalCount = issueMap.size;\nconst closedCount = closed.length;\nconst openCount = totalCount - closedCount >= 0 ? totalCount - closedCount : 0;\n\nconst authorMap = {};\nfor (const [num, iss] of issueMap.entries()) {\n  const author = iss.user?.login || 'unknown';\n  authorMap[author] = (authorMap[author] || 0) + 1;\n}\n\nconst authorList = Object.entries(authorMap)\n  .map(([author, count]) => ({ author, count }))\n  .sort((a, b) => b.count - a.count);\n\nconst topAuthor = authorList.length > 0 ? `${authorList[0].author} (${authorList[0].count})` : 'None';\n\nreturn [{\n  json: {\n    week_date: prep.week_date,\n    repo_full_name: prep.repo_full_name,\n    total_issues: totalCount,\n    bugs_count: bugsCount,\n    features_count: featuresCount,\n    tasks_count: tasksCount,\n    needs_triage_count: needsTriageCount,\n    closed_count: closedCount,\n    open_count: openCount,\n    top_author: topAuthor,\n    authors: authorList,\n    sample_issues: Array.from(issueMap.values()).slice(0, 10).map(i => ({\n      number: i.number,\n      title: i.title,\n      author: i.user?.login,\n      state: i.state,\n      labels: (i.labels || []).map(l => typeof l === 'string' ? l : l.name)\n    }))\n  }\n}];"
+      }
+    },
+    {
+      "id": "get-history-stats",
+      "name": "Get_Previous_Week_Stats",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        1660,
+        480
+      ],
+      "parameters": {
+        "alwaysOutputData": true,
+        "dataTableId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "hFOH2XlSNcaiGUIL"
+        },
+        "limit": 1,
+        "operation": "get",
+        "sortBy": "week_date:desc"
+      }
+    },
+    {
+      "id": "calc-deltas",
+      "name": "Calculate_Weekly_Diff",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1880,
+        480
+      ],
+      "parameters": {
+        "jsCode": "// Calculate Week-over-Week Diff (Δ)\nconst current = $('Aggregate_Statistics').first().json;\nconst historyRows = $('Get_Previous_Week_Stats').all().map(i => i.json);\nconst prev = historyRows[0] || {};\n\nconst prevTotal = Number(prev.total_issues || 0);\nconst prevBugs = Number(prev.bugs_count || 0);\nconst prevFeatures = Number(prev.features_count || 0);\nconst prevTasks = Number(prev.tasks_count || 0);\nconst prevClosed = Number(prev.closed_count || 0);\n\nfunction formatDelta(currVal, prevVal) {\n  const diff = currVal - prevVal;\n  if (diff > 0) return `+${diff} (↑)`;\n  if (diff < 0) return `${diff} (↓)`;\n  return `0 (=)`;\n}\n\nconst diffTotal = formatDelta(current.total_issues, prevTotal);\nconst diffBugs = formatDelta(current.bugs_count, prevBugs);\nconst diffFeatures = formatDelta(current.features_count, prevFeatures);\nconst diffTasks = formatDelta(current.tasks_count, prevTasks);\nconst diffClosed = formatDelta(current.closed_count, prevClosed);\n\nconst prompt = `Ты — Staff/Principal системный архитектор и тимлид в бигтехе.\nСформируй краткий, экспертный аналитический комментарий недели («AI-комментарий недели») для еженедельного дайджеста команды разработки по GitHub Issues.\n\nМетрики текущей недели (${current.week_date}):\n- Всего Issues: ${current.total_issues} [Δ к прошлой неделе: ${diffTotal}]\n- Открытые баги: ${current.bugs_count} [Δ к прошлой неделе: ${diffBugs}]\n- Запросы фичей: ${current.features_count} [Δ к прошлой неделе: ${diffFeatures}]\n- Задачи/вопросы: ${current.tasks_count} [Δ к прошлой неделе: ${diffTasks}]\n- Закрыто Issues: ${current.closed_count} [Δ к прошлой неделе: ${diffClosed}]\n- Требуют триажа (needs-triage): ${current.needs_triage_count}\n- Топ контрибьютор: ${current.top_author}\n\nПравила:\n1. Пиши на русском языке, лаконично, структурированно (2-3 емких абзаца или маркированных пункта).\n2. Оцени динамику (дельта к прошлой неделе): тренд стабильности качества, нагрузку на саппорт и бэклог.\n3. Дай одну ключевую рекомендацию команде на следующий спринт.`;\n\nreturn [{\n  json: {\n    ...current,\n    prev_week_date: prev.week_date || \"N/A\",\n    prev_total: prevTotal,\n    prev_bugs: prevBugs,\n    prev_features: prevFeatures,\n    prev_tasks: prevTasks,\n    prev_closed: prevClosed,\n    diff_total: diffTotal,\n    diff_bugs: diffBugs,\n    diff_features: diffFeatures,\n    diff_tasks: diffTasks,\n    diff_closed: diffClosed,\n    ai_prompt: prompt\n  }\n}];"
+      }
+    },
+    {
+      "id": "ai-annotation-chain",
+      "name": "AI_Weekly_Annotation_Chain",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        2100,
+        480
+      ],
+      "parameters": {
+        "options": {},
+        "promptType": "define",
+        "text": "={{ $json.ai_prompt }}"
+      }
+    },
+    {
+      "id": "openai-report-model",
+      "name": "OpenAI_Report_Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        2100,
+        680
+      ],
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "cachedResultName": "openai/gpt-4o-mini",
+          "mode": "list",
+          "value": "openai/gpt-4o-mini"
+        },
+        "options": {
+          "temperature": 0.3
+        }
+      },
+      "credentials": {
+        "openAiApi": {
+          "id": "4vAGMhrAZlwUItRZ",
+          "name": "VseLLM LiteLLM API"
+        }
+      }
+    },
+    {
+      "id": "render-html-report",
+      "name": "Render_HTML_Report",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2320,
+        480
+      ],
+      "parameters": {
+        "jsCode": "// Render complete HTML email and prepare Data Table record\nconst stats = $('Calculate_Weekly_Diff').first().json;\nconst aiComment = ($json.text || $json.output || \"Динамика недели стабильна. Команда успешно справляется с разбором входящих Issues.\").trim();\n\nconst authorsHtml = stats.authors.map(a => `\n  <tr>\n    <td style=\"padding: 8px 12px; border-bottom: 1px solid #e1e4e8;\"><b>@${a.author}</b></td>\n    <td style=\"padding: 8px 12px; border-bottom: 1px solid #e1e4e8; text-align: right;\">${a.count}</td>\n  </tr>\n`).join('');\n\nconst html = `\n<!DOCTYPE html>\n<html>\n<head>\n  <meta charset=\"utf-8\">\n  <style>\n    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f6f8fa; margin: 0; padding: 24px; color: #24292e; }\n    .container { max-width: 680px; margin: 0 auto; background: #ffffff; border-radius: 8px; border: 1px solid #e1e4e8; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }\n    .header { background: #0366d6; color: #ffffff; padding: 24px 32px; }\n    .header h1 { margin: 0 0 8px 0; font-size: 22px; }\n    .header p { margin: 0; opacity: 0.9; font-size: 14px; }\n    .content { padding: 32px; }\n    .kpi-row { display: flex; gap: 12px; margin-bottom: 24px; }\n    .kpi-card { flex: 1; background: #f6f8fa; border: 1px solid #e1e4e8; border-radius: 6px; padding: 12px; text-align: center; }\n    .kpi-val { font-size: 24px; font-weight: bold; color: #0366d6; }\n    .kpi-lbl { font-size: 12px; color: #586069; text-transform: uppercase; margin-top: 4px; }\n    .ai-block { background: #f0f8ff; border-left: 4px solid #0366d6; padding: 16px 20px; border-radius: 0 6px 6px 0; margin-bottom: 28px; }\n    .ai-block h3 { margin: 0 0 10px 0; color: #0366d6; font-size: 16px; display: flex; align-items: center; }\n    .table-wrapper { width: 100%; border-collapse: collapse; margin-bottom: 24px; font-size: 14px; }\n    .table-wrapper th { background: #f6f8fa; padding: 10px 12px; border-bottom: 2px solid #e1e4e8; text-align: left; }\n    .table-wrapper td { padding: 10px 12px; border-bottom: 1px solid #e1e4e8; }\n    .badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 12px; font-weight: 600; }\n    .badge-bug { background: #ffeef0; color: #d73a49; }\n    .badge-feat { background: #dcffe4; color: #28a745; }\n    .badge-task { background: #e8f4fd; color: #0366d6; }\n    .badge-triage { background: #fffbdd; color: #735c0f; }\n    .footer { background: #f6f8fa; padding: 16px 32px; font-size: 12px; color: #6a737d; text-align: center; border-top: 1px solid #e1e4e8; }\n  </style>\n</head>\n<body>\n  <div class=\"container\">\n    <div class=\"header\">\n      <h1>📊 Еженедельный отчёт по GitHub Issues</h1>\n      <p>Репозиторий: <b>${stats.repo_full_name}</b> | Неделя: <b>${stats.week_date}</b></p>\n    </div>\n    <div class=\"content\">\n      \n      <div class=\"kpi-row\">\n        <div class=\"kpi-card\">\n          <div class=\"kpi-val\">${stats.total_issues}</div>\n          <div class=\"kpi-lbl\">Всего Issues</div>\n        </div>\n        <div class=\"kpi-card\">\n          <div class=\"kpi-val\" style=\"color: #d73a49;\">${stats.bugs_count}</div>\n          <div class=\"kpi-lbl\">Баги</div>\n        </div>\n        <div class=\"kpi-card\">\n          <div class=\"kpi-val\" style=\"color: #28a745;\">${stats.features_count}</div>\n          <div class=\"kpi-lbl\">Фичи</div>\n        </div>\n        <div class=\"kpi-card\">\n          <div class=\"kpi-val\" style=\"color: #6f42c1;\">${stats.closed_count}</div>\n          <div class=\"kpi-lbl\">Закрыто</div>\n        </div>\n      </div>\n\n      <div class=\"ai-block\">\n        <h3>🤖 AI-комментарий недели</h3>\n        <p style=\"margin: 0; line-height: 1.6; white-space: pre-wrap;\">${aiComment}</p>\n      </div>\n\n      <h3 style=\"margin: 0 0 12px 0; font-size: 16px;\">📈 Сравнение с прошлой неделей (Δ)</h3>\n      <table class=\"table-wrapper\">\n        <thead>\n          <tr>\n            <th>Показатель</th>\n            <th>Прошлая неделя (${stats.prev_week_date})</th>\n            <th>Текущая неделя (${stats.week_date})</th>\n            <th style=\"text-align: right;\">Динамика (Δ)</th>\n          </tr>\n        </thead>\n        <tbody>\n          <tr>\n            <td>Всего Issues</td>\n            <td>${stats.prev_total}</td>\n            <td><b>${stats.total_issues}</b></td>\n            <td style=\"text-align: right; font-weight: bold;\">${stats.diff_total}</td>\n          </tr>\n          <tr>\n            <td><span class=\"badge badge-bug\">Bugs</span></td>\n            <td>${stats.prev_bugs}</td>\n            <td><b>${stats.bugs_count}</b></td>\n            <td style=\"text-align: right; font-weight: bold;\">${stats.diff_bugs}</td>\n          </tr>\n          <tr>\n            <td><span class=\"badge badge-feat\">Features</span></td>\n            <td>${stats.prev_features}</td>\n            <td><b>${stats.features_count}</b></td>\n            <td style=\"text-align: right; font-weight: bold;\">${stats.diff_features}</td>\n          </tr>\n          <tr>\n            <td><span class=\"badge badge-task\">Tasks</span></td>\n            <td>${stats.prev_tasks}</td>\n            <td><b>${stats.tasks_count}</b></td>\n            <td style=\"text-align: right; font-weight: bold;\">${stats.diff_tasks}</td>\n          </tr>\n          <tr>\n            <td>Закрыто Issues</td>\n            <td>${stats.prev_closed}</td>\n            <td><b>${stats.closed_count}</b></td>\n            <td style=\"text-align: right; font-weight: bold;\">${stats.diff_closed}</td>\n          </tr>\n        </tbody>\n      </table>\n\n      <h3 style=\"margin: 24px 0 12px 0; font-size: 16px;\">👥 Активность авторов</h3>\n      <table class=\"table-wrapper\">\n        <thead>\n          <tr>\n            <th>Автор</th>\n            <th style=\"text-align: right;\">Количество Issues</th>\n          </tr>\n        </thead>\n        <tbody>\n          ${authorsHtml || '<tr><td colspan=\"2\" style=\"text-align:center; color:#586069;\">Нет активности авторов за неделю</td></tr>'}\n        </tbody>\n      </table>\n\n    </div>\n    <div class=\"footer\">\n      Сгенерировано автоматически с помощью n8n & VseLLM AI Assistant · Практика 7.2 ITMO\n    </div>\n  </div>\n</body>\n</html>\n`;\n\nreturn [{\n  json: {\n    week_date: stats.week_date,\n    total_issues: stats.total_issues,\n    bugs_count: stats.bugs_count,\n    features_count: stats.features_count,\n    tasks_count: stats.tasks_count,\n    closed_count: stats.closed_count,\n    top_author: stats.top_author,\n    summary: aiComment.slice(0, 500),\n    subject: `[GitHub Issues] Еженедельный дайджест: ${stats.week_date} (${stats.repo_full_name})`,\n    html_report: html\n  }\n}];"
+      }
+    },
+    {
+      "id": "save-weekly-stats",
+      "name": "Save_Weekly_Stats_Table",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        2540,
+        480
+      ],
+      "parameters": {
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "bugs_count": "={{ $json.bugs_count }}",
+            "closed_count": "={{ $json.closed_count }}",
+            "features_count": "={{ $json.features_count }}",
+            "summary": "={{ $json.summary }}",
+            "tasks_count": "={{ $json.tasks_count }}",
+            "top_author": "={{ $json.top_author }}",
+            "total_issues": "={{ $json.total_issues }}",
+            "week_date": "={{ $json.week_date }}"
+          }
+        },
+        "dataTableId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "hFOH2XlSNcaiGUIL"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "send-email-gmail",
+      "name": "Send_Weekly_Email_Gmail",
+      "disabled": true,
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        2760,
+        480
+      ],
+      "parameters": {
+        "emailType": "html",
+        "message": "={{ $('Render_HTML_Report').first().json.html_report }}",
+        "operation": "send",
+        "options": {},
+        "resource": "message",
+        "sendTo": "michail.tchernetsov@ya.ru",
+        "subject": "={{ $('Render_HTML_Report').first().json.subject }}"
+      },
+      "webhookId": "cf783566-80fa-46fe-98df-8f6fa6ba4089"
+    }
+  ],
+  "connections": {
+    "AI_Weekly_Annotation_Chain": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Render_HTML_Report",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Aggregate_Statistics": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Get_Previous_Week_Stats",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Calculate_Weekly_Diff": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "AI_Weekly_Annotation_Chain",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Cron_Trigger_Monday_9AM": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Prepare_Time_Window",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Get_Previous_Week_Stats": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Calculate_Weekly_Diff",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "GitHub_All_Issues_Week": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Aggregate_Statistics",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "GitHub_Closed_Issues": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "GitHub_All_Issues_Week",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "GitHub_Open_Bugs": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "GitHub_Open_Features",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "GitHub_Open_Features": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "GitHub_Closed_Issues",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Manual_Trigger": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Prepare_Time_Window",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "OpenAI_Report_Model": {
+      "ai_languageModel": [
+        [
+          {
+            "index": 0,
+            "node": "AI_Weekly_Annotation_Chain",
+            "type": "ai_languageModel"
+          }
+        ]
+      ]
+    },
+    "Prepare_Time_Window": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "GitHub_Open_Bugs",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Render_HTML_Report": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Save_Weekly_Stats_Table",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Save_Weekly_Stats_Table": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Send_Weekly_Email_Gmail",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Webhook_Trigger_Weekly": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Prepare_Time_Window",
+            "type": "main"
+          }
+        ]
+      ]
+    }
+  },
+  "nodeGroups": [],
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": {
+    "node:Cron_Trigger_Monday_9AM": {
+      "recurrenceRules": [
+        null
+      ],
+      "recurrenceRuleSignatures": [
+        null
+      ]
+    }
+  },
+  "pinData": null,
+  "meta": null,
+  "tags": [],
+  "shared": [
+    {
+      "role": "workflow:owner",
+      "workflowId": "hnVyNLoOIhJFEHyQ",
+      "projectId": "pKuK9YNPQWYSy2EA",
+      "project": {
+        "id": "pKuK9YNPQWYSy2EA",
+        "name": "Mikhail Chernetsov <michail.tchernetsov@ya.ru>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "customTelemetryTags": [],
+        "creatorId": "22092845-3675-4b96-a566-4451241e33e7",
+        "createdAt": "2026-11-06T07:11:33.244Z",
+        "updatedAt": "2026-11-06T07:12:02.739Z"
+      },
+      "createdAt": "2026-11-16T11:41:44.829Z",
+      "updatedAt": "2026-11-16T11:41:44.829Z"
+    }
+  ],
+  "parentFolder": null
+}

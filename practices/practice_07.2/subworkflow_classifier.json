@@ -1,0 +1,174 @@
+{
+  "id": "6fpaspSs3hByxl39",
+  "name": "[Practice 7.2] Sub-workflow: AI Issue Classifier",
+  "description": null,
+  "active": true,
+  "activeVersionId": "a9a54197-13e2-4c2e-867c-d5d0c87d1bd7",
+  "createdAt": "2026-11-16T11:36:25.180Z",
+  "updatedAt": "2026-11-16T11:37:00.858Z",
+  "isArchived": false,
+  "versionId": "a9a54197-13e2-4c2e-867c-d5d0c87d1bd7",
+  "versionCounter": 2,
+  "sourceWorkflowId": null,
+  "triggerCount": 0,
+  "nodes": [
+    {
+      "id": "sub-trigger",
+      "name": "Execute_Workflow_Trigger",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        240,
+        300
+      ],
+      "parameters": {
+        "inputSource": "passthrough"
+      }
+    },
+    {
+      "id": "llm-chain",
+      "name": "AI_Issue_Classifier_Chain",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        480,
+        300
+      ],
+      "parameters": {
+        "hasOutputParser": true,
+        "promptType": "define",
+        "text": "=You are an automated GitHub Issue triage classifier for a software engineering project.\nAnalyze the following GitHub Issue:\nTitle: {{ $json.title }}\nBody: {{ $json.body }}\n\nClassify the issue into exactly one of these types:\n- \"bug\": Something is broken, unexpected error, crash, regression, or malfunctioning behavior.\n- \"feature\": Request for new functionality, feature enhancement, or architectural extension.\n- \"task\": Maintenance, refactoring, documentation questions, setup instructions, or general tasks.\n- \"unknown\": The description is too vague, ambiguous, lacking reproduction steps or context (e.g. \"иногда не работает\").\n\nProvide a confidence score between 0.0 and 1.0 representing how confident you are in this classification.\nCRITICAL RULE: If the issue lacks details, contains vague phrases without error messages/steps, or could fit multiple types equally, set type to \"unknown\" and confidence strictly below 0.8 (e.g. 0.5)."
+      }
+    },
+    {
+      "id": "openai-model",
+      "name": "OpenAI_Chat_Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        480,
+        500
+      ],
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "cachedResultName": "openai/gpt-4o-mini",
+          "mode": "list",
+          "value": "openai/gpt-4o-mini"
+        },
+        "options": {
+          "temperature": 0.1
+        }
+      },
+      "credentials": {
+        "openAiApi": {
+          "id": "4vAGMhrAZlwUItRZ",
+          "name": "VseLLM LiteLLM API"
+        }
+      }
+    },
+    {
+      "id": "output-parser",
+      "name": "Structured_Output_Parser",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        680,
+        500
+      ],
+      "parameters": {
+        "autoFix": false,
+        "inputSchema": "{\n  \"type\": \"object\",\n  \"properties\": {\n    \"type\": {\n      \"type\": \"string\",\n      \"enum\": [\"bug\", \"task\", \"feature\", \"unknown\"],\n      \"description\": \"Category of the issue\"\n    },\n    \"confidence\": {\n      \"type\": \"number\",\n      \"description\": \"Confidence score between 0.0 and 1.0\"\n    },\n    \"reasoning\": {\n      \"type\": \"string\",\n      \"description\": \"Short explanation of the classification\"\n    }\n  },\n  \"required\": [\"type\", \"confidence\"]\n}",
+        "schemaType": "manual"
+      }
+    },
+    {
+      "id": "normalize-output",
+      "name": "Normalize_Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        780,
+        300
+      ],
+      "parameters": {
+        "jsCode": "// Normalize output fields for calling workflow\nconst item = $json.output || $json;\nlet type = (item.type || \"unknown\").toLowerCase().trim();\nif (![\"bug\", \"task\", \"feature\", \"unknown\"].includes(type)) {\n  type = \"unknown\";\n}\nlet confidence = Number(item.confidence);\nif (isNaN(confidence) || confidence < 0 || confidence > 1) {\n  confidence = 0.5;\n}\n\nreturn [{\n  json: {\n    type: type,\n    confidence: Math.round(confidence * 100) / 100,\n    reasoning: item.reasoning || \"\"\n  }\n}];"
+      }
+    }
+  ],
+  "connections": {
+    "AI_Issue_Classifier_Chain": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Normalize_Result",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Execute_Workflow_Trigger": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "AI_Issue_Classifier_Chain",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "OpenAI_Chat_Model": {
+      "ai_languageModel": [
+        [
+          {
+            "index": 0,
+            "node": "AI_Issue_Classifier_Chain",
+            "type": "ai_languageModel"
+          }
+        ]
+      ]
+    },
+    "Structured_Output_Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "index": 0,
+            "node": "AI_Issue_Classifier_Chain",
+            "type": "ai_outputParser"
+          }
+        ]
+      ]
+    }
+  },
+  "nodeGroups": [],
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "pinData": null,
+  "meta": null,
+  "tags": [],
+  "shared": [
+    {
+      "role": "workflow:owner",
+      "workflowId": "6fpaspSs3hByxl39",
+      "projectId": "pKuK9YNPQWYSy2EA",
+      "project": {
+        "id": "pKuK9YNPQWYSy2EA",
+        "name": "Mikhail Chernetsov <michail.tchernetsov@ya.ru>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "customTelemetryTags": [],
+        "creatorId": "22092845-3675-4b96-a566-4451241e33e7",
+        "createdAt": "2026-11-06T07:11:33.244Z",
+        "updatedAt": "2026-11-06T07:12:02.739Z"
+      },
+      "createdAt": "2026-11-16T11:36:25.184Z",
+      "updatedAt": "2026-11-16T11:36:25.184Z"
+    }
+  ],
+  "parentFolder": null
+}
