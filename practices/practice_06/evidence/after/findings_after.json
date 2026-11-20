@@ -1,0 +1,57 @@
+{
+  "sqli_profile": {
+    "status": 403,
+    "blocked": true,
+    "response": {
+      "error": "access denied"
+    }
+  },
+  "sqli_search": {
+    "status": 200,
+    "blocked": true,
+    "response": []
+  },
+  "idor_profile": {
+    "status": 403,
+    "blocked": true,
+    "response": {
+      "error": "access denied"
+    }
+  },
+  "orders_protection": {
+    "unauth_status": 401,
+    "blocked": true,
+    "alice_orders_count": 1
+  },
+  "price_tampering": {
+    "status": 201,
+    "enforced_price": 5000,
+    "mitigated": true
+  },
+  "bfla_export": {
+    "anon_blocked": true,
+    "cust_blocked": true,
+    "staff_allowed": true
+  },
+  "arbitrary_file_read": {
+    "bob_blocked": true,
+    "secret_blocked": true,
+    "own_allowed": true
+  },
+  "debug_logs": {
+    "unauth_blocked": true,
+    "cust_blocked": true,
+    "passwords_masked": true,
+    "tokens_masked": true
+  },
+  "stored_xss": {
+    "status": 200,
+    "sanitized": true
+  },
+  "assistant_guardrails": {
+    "delete_tree_blocked": true,
+    "export_profiles_blocked": true,
+    "read_secret_blocked": true,
+    "own_receipt_allowed": true
+  }
+}
