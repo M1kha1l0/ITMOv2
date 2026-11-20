@@ -25,7 +25,8 @@ export async function triageIssue(
     throw new Error(`Ошибка сервиса n8n (${response.status}): ${errorBody || response.statusText}`);
   }
 
-  const json = await response.json();
+  const rawJson = await response.json();
+  const json = Array.isArray(rawJson) ? rawJson[0] : rawJson;
   
   // Format response whether it comes from n8n webhook or mock
   const type = (json.type || 'unknown').toLowerCase();
