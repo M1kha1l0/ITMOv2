@@ -1,16 +1,5 @@
 {
-  "id": "hnVyNLoOIhJFEHyQ",
   "name": "[Practice 7.2] Weekly Issues Digest & AI Report",
-  "description": null,
-  "active": true,
-  "activeVersionId": "1653f21d-ba4a-47e7-93a1-de4ee9568bf8",
-  "createdAt": "2026-11-16T11:41:44.826Z",
-  "updatedAt": "2026-11-16T11:55:22.436Z",
-  "isArchived": false,
-  "versionId": "1653f21d-ba4a-47e7-93a1-de4ee9568bf8",
-  "versionCounter": 5,
-  "sourceWorkflowId": null,
-  "triggerCount": 2,
   "nodes": [
     {
       "id": "cron-trigger",
@@ -337,6 +326,7 @@
     {
       "id": "send-email-gmail",
       "name": "Send_Weekly_Email_Gmail",
+      "webhookId": "cf783566-80fa-46fe-98df-8f6fa6ba4089",
       "disabled": true,
       "type": "n8n-nodes-base.gmail",
       "typeVersion": 2.2,
@@ -352,8 +342,32 @@
         "resource": "message",
         "sendTo": "michail.tchernetsov@ya.ru",
         "subject": "={{ $('Render_HTML_Report').first().json.subject }}"
+      }
+    },
+    {
+      "id": "send-email-yandex",
+      "name": "Send_Weekly_Email_Yandex",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        2760,
+        300
+      ],
+      "parameters": {
+        "emailFormat": "html",
+        "fromEmail": "michail.tchernetsov@ya.ru",
+        "html": "={{ $('Render_HTML_Report').first().json.html_report }}",
+        "options": {},
+        "subject": "={{ $('Render_HTML_Report').first().json.subject }}",
+        "toEmail": "michail.tchernetsov@ya.ru"
       },
-      "webhookId": "cf783566-80fa-46fe-98df-8f6fa6ba4089"
+      "credentials": {
+        "smtp": {
+          "id": "0pmeUWUIc9LvRr3S",
+          "name": "Yandex Mail SMTP"
+        }
+      },
+      "webhookId": "8bd1488a-5d2d-43e2-ba71-844af3edc758"
     }
   ],
   "connections": {
@@ -507,6 +521,11 @@
             "index": 0,
             "node": "Send_Weekly_Email_Gmail",
             "type": "main"
+          },
+          {
+            "node": "Send_Weekly_Email_Yandex",
+            "type": "main",
+            "index": 0
           }
         ]
       ]
@@ -523,42 +542,7 @@
       ]
     }
   },
-  "nodeGroups": [],
   "settings": {
     "executionOrder": "v1"
-  },
-  "staticData": {
-    "node:Cron_Trigger_Monday_9AM": {
-      "recurrenceRules": [
-        null
-      ],
-      "recurrenceRuleSignatures": [
-        null
-      ]
-    }
-  },
-  "pinData": null,
-  "meta": null,
-  "tags": [],
-  "shared": [
-    {
-      "role": "workflow:owner",
-      "workflowId": "hnVyNLoOIhJFEHyQ",
-      "projectId": "pKuK9YNPQWYSy2EA",
-      "project": {
-        "id": "pKuK9YNPQWYSy2EA",
-        "name": "Mikhail Chernetsov <michail.tchernetsov@ya.ru>",
-        "type": "personal",
-        "icon": null,
-        "description": null,
-        "customTelemetryTags": [],
-        "creatorId": "22092845-3675-4b96-a566-4451241e33e7",
-        "createdAt": "2026-11-06T07:11:33.244Z",
-        "updatedAt": "2026-11-06T07:12:02.739Z"
-      },
-      "createdAt": "2026-11-16T11:41:44.829Z",
-      "updatedAt": "2026-11-16T11:41:44.829Z"
-    }
-  ],
-  "parentFolder": null
+  }
 }
